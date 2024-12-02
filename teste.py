@@ -110,7 +110,7 @@ q_values = [1, 2, 3]
 params = {}
 
 for count, (p, q) in enumerate(product(p_values, q_values)):
-    params[f"model_{count}"] = {"p": p, "q": q}
+    params[f"Modelo_{count}"] = {"p": p, "q": q}
 
 resultados = {}
 
@@ -121,7 +121,7 @@ for name, param in params.items():
             model_fit = model.fit()
         resultados[name] = {
             **param,
-            "model": model,
+            "Modelo": model_fit,
             "warnings": [warn.message for warn in warns],
             "AIC": model_fit.aic,
             "BIC": model_fit.bic,
@@ -130,98 +130,66 @@ for name, param in params.items():
         print(f"Erro ao ajustar o modelo ARIMA({p}, 0, {q}): {e}")
 
 
-def gera_graficos(df, resultados):
+def gera_analises(df, resultados, coluna_serie):
     aic_bic = {}
-    tela, axs = plt.subplots(len(resultados), 1, figsize=(10, 5 * (len(resultados))))
-    for ax, (nome_modelo, modelo) in zip(axs, resultados.items()):
-        # Exemplo de plotagem (substitua com seu código de plotagem)
+    tela_yhat, previstos = plt.subplots(
+        len(resultados), 1, figsize=(10, 5 * len(resultados))
+    )
+    tela_yhat.patch.set_facecolor("whitesmoke")
+    for i, (nome_modelo, modelo) in enumerate(resultados.items()):
+        p = modelo['p']
+        q = modelo['q']
+        model_fit = modelo["Modelo"]
 
-        model_fit = modelo["model"]
         yhat = model_fit.predict(start=0, end=len(df[coluna_serie]) - 1)
-        sns.lineplot(ax=ax, x=df.index, y=df[coluna_serie])
-        sns.lineplot(ax=ax, x=df.index, y=yhat, color="red")
-        ax.set_title(f"Gráfico para {nome_modelo}")
-        ax.set_xlabel("Eixo X")
-        ax.set_ylabel("Eixo Y")
 
-        aic_bic[nome_modelo] = {"AIC": model_fit.aic, "BIC": model_fit.bic}
+        sns.lineplot(ax=previstos[i], x=df.index, y=df[coluna_serie], label="Real")
+        sns.lineplot(ax=previstos[i], x=df.index, y=yhat, color="red", label="Previsto")
+        previstos[i].set_title(f"Gráfico para ARIMA({p}, 0, {q})")
+        previstos[i].set_xlabel("Eixo X")
+        previstos[i].set_ylabel("Eixo Y")
+        plt.close(tela_yhat)
 
-    plt.show()
+        ljungbox = model_fit.test_serial_correlation(method='ljungbox')
+
+        print(f"\nResultados do teste de Ljung-Box para ARIMA({p}, 0, {q}):\n")
+
+        for lag in range(len(ljungbox[0][0])):
+            p_valor = ljungbox[0][1][lag]
+            print(f"Lag {lag + 1}: p-valor = {p_valor}")
+
+        tela_diagnostics = plt.figure(figsize=(10, 8))
+        tela_diagnostics.patch.set_facecolor("whitesmoke")
+        model_fit.plot_diagnostics(fig=tela_diagnostics)
+        tela_diagnostics.suptitle(f"Gráficos de diagnóstico para ARIMA({p}, 0, {q})")
+
+        aic_bic[(p, q)] = {"AIC": model_fit.aic, "BIC": model_fit.bic}
+
+        plt.show()
+        plt.close(tela_diagnostics)
+
+    aic_bic = pd.DataFrame(
+        [
+            (modelo, nome_modelo["AIC"], nome_modelo["BIC"])
+            for modelo, nome_modelo in resultados.items()
+        ],
+        columns=["Modelo", "AIC", "BIC"],
+    )
+
+    modelo_maximo_aic = aic_bic["Modelo"].loc[aic_bic["AIC"].idxmax()]
+    modelo_maximo_bic = aic_bic["Modelo"].loc[aic_bic["AIC"].idxmax()]
+
+    p_maximo_aic = resultados[modelo_maximo_aic]["p"]
+    q_maximo_aic = resultados[modelo_maximo_aic]["q"]
+
+    p_maximo_bic = resultados[modelo_maximo_bic]["p"]
+    q_maximo_bic = resultados[modelo_maximo_bic]["q"]
+
+    print(
+        rf"O modelo com maior AIC foi o ARIMA({p_maximo_aic}, 0, {q_maximo_aic})"
+        rf" e o de maior BIC foi o ARIMA({p_maximo_bic}, 0, {q_maximo_bic})."
+    )
 
     return aic_bic
 
-
-aic_bic = pd.DataFrame(
-    [
-        (modelo, nome_modelo["AIC"], nome_modelo["BIC"])
-        for modelo, nome_modelo in resultados.items()
-    ],
-    columns=["Modelo", "AIC", "BIC"]
-)
-
-modelo_maximo_aic = aic_bic['Modelo'].loc[aic_bic['AIC'].idxmax()]
-modelo_maximo_bic = aic_bic['Modelo'].loc[aic_bic['AIC'].idxmax()]
-
-p_maximo_aic = resultados[modelo_maximo_aic]["p"]
-q_maximo_aic = resultados[modelo_maximo_aic]["q"]
-
-p_maximo_bic = resultados[modelo_maximo_bic]["p"]
-q_maximo_bic = resultados[modelo_maximo_bic]["q"]
-
-print(rf"O modelo com maior AIC foi o ARIMA({p_maximo_aic}, 0, {q_maximo_bic})"
-       rf" e o de maior BIC foi o ARIMA({p_maximo_bic}, 0, {q_maximo_bic}).")
-
-
-###
-
-residuos = model_fit.resid
-# Realizar o teste de Ljung-Box
-ljung_box_result = acorr_ljungbox(residuos, lags=[10], return_df=True)
-print(ljung_box_result)
-
-# incluir uma função para receber um model_fit e gerar os gráficos
-
-# for p in p_values:
-#     for q in q_values:
-#         try:
-#             # Ajustar o modelo ARIMA
-#             model = ARIMA(serie, order=(p, 0, q))
-#             model_fit = model.fit()
-
-#             # Fazer previsões
-#             y_hat = model_fit.predict(start=0, end=len(serie) - 1)
-
-#             # Plotar os valores observados e previstos
-#             import matplotlib.pyplot as plt
-
-#             plt.figure(figsize=(10, 6))
-#             plt.plot(serie, label="Valores Observados")
-#             plt.plot(y_hat, label=f"Previsões ARIMA({p}, 0, {q})", color="red")
-#             plt.xlabel("Data")
-#             plt.ylabel("Poluição")
-#             plt.title(f"Valores Observados e Previstos usando ARIMA({p}, 0, {q})")
-#             plt.legend()
-#             plt.show()
-#             print(model_fit.aic)
-#         except Exception as e:
-#             print(f"Erro ao ajustar o modelo ARIMA({p}, 0, {q}): {e}")
-
-
-plt.figure(figsize=(10, 6))
-plt.plot(df["pollution"], label="Série Temporal")
-plt.plot(y_hat, label="Previsão", color="red")
-plt.xlabel("Data")
-plt.ylabel("Poluição")
-plt.title("Previsão de Poluição usando ARIMA")
-plt.legend()
-plt.show()
-
-residuos = model_fit.resid  # Plotar os resíduos
-plt.figure(figsize=(10, 6))
-plt.scatter(residuos.index, residuos)
-plt.xlabel("Data")
-plt.ylabel("Resíduos")
-plt.title("Resíduos do Modelo ARIMA")
-plt.show()
-
-
+aic_bic = gera_analises(df, resultados, coluna_serie)
