@@ -5,8 +5,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
+from sklearn.metrics import mean_squared_error
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
-from statsmodels.stats.diagnostic import acorr_ljungbox
 from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.tsa.stattools import adfuller
 
@@ -151,6 +151,10 @@ def gera_analises(df, resultados, coluna_serie):
         plt.close(tela_yhat)
 
         ljungbox = model_fit.test_serial_correlation(method='ljungbox')
+
+        mse = mean_squared_error(df[coluna_serie], yhat)
+        rmse = mse ** 0.5
+        print(f"\nAcurácia do modelo ARIMA({p}, 0, {q}): RMSE = {rmse}")
 
         print(f"\nResultados do teste de Ljung-Box para ARIMA({p}, 0, {q}):\n")
 
