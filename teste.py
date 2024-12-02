@@ -130,6 +130,56 @@ for name, param in params.items():
         print(f"Erro ao ajustar o modelo ARIMA({p}, 0, {q}): {e}")
 
 
+def gera_graficos_predict(model_fit, p, q):
+    tela_yhat = plt.figure(figsize=(10, 8))
+
+    tela_yhat.patch.set_facecolor("whitesmoke")
+
+    grafico_yhat = sns.lineplot(x=df.index, y=df[coluna_serie], label="Real")
+    sns.lineplot(x=df.index, y=yhat, color="red", label="Previsto")
+    grafico_yhat.set_title(f"Gráfico para ARIMA({p}, 0, {q})")
+    grafico_yhat.set_xlabel("Eixo X")
+    grafico_yhat.set_ylabel("Eixo Y")
+    
+    return yhat
+    
+def gera_ljungbox(model_fit):
+    
+    ljungbox = model_fit.test_serial_correlation(method="ljungbox")
+    
+    print(f"\nResultados do teste de Ljung-Box para ARIMA({p}, 0, {q}):\n")
+    
+    for lag in range(len(ljungbox[0][0])):
+        p_valor = ljungbox[0][1][lag]
+        print(f"Lag {lag + 1}: p-valor = {p_valor}")
+
+for i, (nome_modelo, modelo) in enumerate(resultados.items()):
+    
+    p = modelo['p']
+    q = modelo['q']
+    model_fit = modelo["Modelo"]
+    
+    yhat = model_fit.predict(start=0, end=len(df[coluna_serie]) - 1)
+
+    predict = gera_graficos_predict(yhat, p, q)
+    
+    ljungbox = gera_ljungbox(model_fit)
+
+    tela_diagnostics = plt.figure(figsize=(10, 8))
+    tela_diagnostics.patch.set_facecolor("whitesmoke")
+    model_fit.plot_diagnostics(fig=tela_diagnostics)
+    tela_diagnostics.suptitle(f"Gráficos de diagnóstico para ARIMA({p}, 0, {q})")
+
+
+
+
+
+
+
+
+
+
+
 def gera_analises(df, resultados, coluna_serie):
     aic_bic = {}
     tela_yhat, previstos = plt.subplots(
