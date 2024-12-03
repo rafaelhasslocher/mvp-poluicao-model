@@ -1,16 +1,13 @@
 import warnings
 from itertools import product
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import seaborn as sns
 from sklearn.metrics import mean_squared_error
-from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.tsa.stattools import adfuller
 
-from funções import gera_diagnosticos, gera_graficos_predict, gera_ljungbox
+from funções import gera_diagnosticos, gera_boxplot, gera_graficos_predict, gera_ljungbox, plot_summary_serie, gera_acf_pacf
 
 pd.options.display.float_format = "{:,.2f}".format
 
@@ -28,57 +25,13 @@ df = df.asfreq(frequencia_serie)
 
 df.describe()
 
-# fazendo o resampling para considerar a poluição média por mês
+plot_summary_serie(df, coluna_serie, coluna_tempo, periodicidade="ME", summary=np.mean)
+plot_summary_serie(df, coluna_serie, coluna_tempo, periodicidade="ME", summary=np.std)
 
-df_mensal_media = df.resample("ME")[coluna_serie].mean().reset_index().copy()
-df_mensal_variancia = df.resample("ME")[coluna_serie].std().reset_index().copy()
+gera_boxplot(df, coluna_serie, df.index.year)
 
-df_mensal_media.set_index(coluna_tempo, inplace=True)
-df_mensal_variancia.set_index(coluna_tempo, inplace=True)
-
-# Criar a figura e os eixos
-tela, (y, media, variancia) = plt.subplots(3, 1, figsize=(15, 15))
-tela.patch.set_facecolor("whitesmoke")
-
-# Plotar o gráfico da série temporal
-sns.lineplot(ax=y, x=df.index, y=df[coluna_serie])
-y.set_title("Desvio padrão da poluição mensal")
-y.set_xlabel("Data")
-y.set_ylabel("Poluição")  # noqa: E703
-
-
-# Plotar a poluição média mensal
-sns.lineplot(ax=media, x=df_mensal_media.index, y=df_mensal_media[coluna_serie])
-media.set_title("Poluição média mensal")
-media.set_xlabel("Data")
-media.set_ylabel("Poluição")  # noqa: E703
-
-# Plotar o desvio padrão da poluição mensal
-sns.lineplot(
-    ax=variancia, x=df_mensal_variancia.index, y=df_mensal_variancia[coluna_serie]
-)
-variancia.set_title("Desvio padrão da poluição mensal")
-variancia.set_xlabel("Data")
-variancia.set_ylabel("Poluição")  # noqa: E703
-
-tela, boxplot = plt.subplots(1, 1, figsize=(7, 7))
-tela.patch.set_facecolor("whitesmoke")
-
-sns.boxplot(
-    x=df.index.year,
-    y=df[coluna_serie],
-    ax=boxplot,
-    hue=df.index.year,
-    palette="GnBu",
-    legend=False,
-)
-boxplot.set_title("Box-plot da poluição anual", fontsize=15)
-boxplot.set_xlabel("Ano", fontsize=10)
-boxplot.set_ylabel("Poluição", fontsize=10)  # noqa: E703
-boxplot.tick_params(axis="x", labelsize=8)
-boxplot.tick_params(axis="y", labelsize=8)
-
-plt.show()
+gera_acf_pacf(df, coluna_serie, lags=10, tipo="acf")
+gera_acf_pacf(df, coluna_serie, lags=10, tipo="pacf")
 
 # testando a estacionariedade da série
 
@@ -86,24 +39,7 @@ result = adfuller(df[coluna_serie])
 print("Estatística ADF", result[0])
 print("p-valor", result[1])
 
-# criar figura e eixos
 
-sns.set_theme(style="whitegrid")
-
-tela, (acf, pacf) = plt.subplots(2, 1, figsize=(10, 10))
-tela.patch.set_facecolor("whitesmoke")
-
-plot_acf(df[coluna_serie], lags=10, ax=acf)
-acf.set_ylim(0, 1)
-acf.set_xlim(0.7, 5.5)
-acf.set_xticks(np.arange(1, 5.5))
-acf.set_title("Gráfico de Autocorrelação")  # noqa: E703
-
-plot_pacf(df[coluna_serie], ax=pacf)
-pacf.set_ylim(0, 1)
-pacf.set_xlim(0.7, 5.5)
-pacf.set_xticks(np.arange(1, 5.5))
-pacf.set_title("Gráfico de Autocorrelação Parcial")  # noqa: E703
 
 
 p_values = [1, 2, 3]
