@@ -1,13 +1,17 @@
-import warnings
-from itertools import product
-
 import numpy as np
 import pandas as pd
-from sklearn.metrics import mean_squared_error
-from statsmodels.tsa.arima.model import ARIMA
+from sklearn.model_selection import TimeSeriesSplit
 from statsmodels.tsa.stattools import adfuller
 
-from funções import gera_diagnosticos, gera_boxplot, gera_graficos_predict, gera_ljungbox, plot_summary_serie, gera_acf_pacf
+from funções import (
+    ajustar_arimas,
+    gera_acf_pacf,
+    gera_boxplot,
+    # gera_diagnosticos,
+    # gera_graficos_predict,
+    # gera_ljungbox,
+    plot_summary_serie,
+)
 
 pd.options.display.float_format = "{:,.2f}".format
 
@@ -39,67 +43,51 @@ result = adfuller(df[coluna_serie])
 print("Estatística ADF", result[0])
 print("p-valor", result[1])
 
-
-
-
 p_values = [1, 2, 3]
 q_values = [1, 2, 3]
 d_values = [0]
 
-params = {}
 
-for count, (p, d, q) in enumerate(product(p_values, d_values, q_values)):
-    params[f"ARIMA({p=}, {d=}, {q=})"] = {"p": p, "d": d, "q": q}
+split = TimeSeriesSplit(n_splits=2)
+# split = TimeSeriesSplit(n_splits=5)
 
-resultados = {}
+resultados, resultados_consolidados = ajustar_arimas(
+    p_values, d_values, q_values, df, split, coluna_serie
+)
 
-for name, param in params.items():
-    try:
-        with warnings.catch_warnings(record=True) as warns:
-            model = ARIMA(df[coluna_serie], order=(param["p"], param["d"], param["q"]))
-            model_fit = model.fit()
-            yhat = model_fit.predict(start=0, end=len(df[coluna_serie]) - 1)
-            acuracia = mean_squared_error(df[coluna_serie], yhat) ** 0.5
-        resultados[name] = {
-            **param,
-            "Modelo": model_fit,
-            "warnings": [warn.message for warn in warns],
-            "AIC": model_fit.aic,
-            "BIC": model_fit.bic,
-            "yhat": yhat,
-            "Acurácia": acuracia
-        }
-    except Exception as e:
-        print(f"Erro ao ajustar o modelo ARIMA({p=}, {d=}, {q=}): {e}")
+resultados
+resultados_consolidados
 
-aic_bic = {}
+# aic_bic = {}
 
-for nome_modelo, modelo in resultados.items():
-    p = modelo["p"]
-    d = modelo["d"]
-    q = modelo["q"]
-    model_fit = modelo["Modelo"]
-    aic = modelo["AIC"]
-    bic = modelo["BIC"]
-    acuracia = modelo["Acurácia"]
+# for nome_modelo, modelo in resultados.items():
+#     p = modelo["p"]
+#     d = modelo["d"]
+#     q = modelo["q"]
+#     model_fit = modelo["Modelo"]
+#     aic = modelo["AIC"]
+#     bic = modelo["BIC"]
+#     acuracia = modelo["Acurácia"]
 
-    yhat = model_fit.predict(start=0, end=len(df[coluna_serie]) - 1)
+#     yhat = model_fit.predict(start=0, end=len(df[coluna_serie]) - 1)
 
-    predict = gera_graficos_predict(df, coluna_serie, yhat, p, d, q)
+#     predict = gera_graficos_predict(df, coluna_serie, yhat, p, d, q)
 
-    ljungbox = gera_ljungbox(model_fit, p, d, q)
-    
-    diagnosticos = gera_diagnosticos(model_fit, p, d, q)
+#     ljungbox = gera_ljungbox(model_fit, p, d, q)
 
-df_resultados = pd.DataFrame(resultados.values())
+#     diagnosticos = gera_diagnosticos(model_fit, p, d, q)
 
-max_aic = df_resultados.loc[df_resultados['AIC'].idxmax()]
-max_bic = df_resultados.loc[df_resultados['BIC'].idxmax()]
-max_acuracia = df_resultados.loc[df_resultados['Acurácia'].idxmax()]
-    
-print(rf"O modelo de maior AIC foi o ARIMA(p={max_aic['p']}, d={max_aic['d']}, q={max_aic['q']}),"
-      rf" o de maior BIC foi o ARIMA(p={max_bic['p']}, d={max_bic['d']}, q={max_bic['q']})"
-      rf" e o de maior Acurácia foi o ARIMA(p={max_acuracia['p']}, d={max_acuracia['d']}, q={max_acuracia['q']})")
+# df_resultados = pd.DataFrame(resultados.values())
+
+# max_aic = df_resultados.loc[df_resultados["AIC"].idxmax()]
+# max_bic = df_resultados.loc[df_resultados["BIC"].idxmax()]
+# max_acuracia = df_resultados.loc[df_resultados["Acurácia"].idxmax()]
+
+# print(
+#     rf"O modelo de maior AIC foi o ARIMA(p={max_aic['p']}, d={max_aic['d']}, q={max_aic['q']}),"
+#     rf" o de maior BIC foi o ARIMA(p={max_bic['p']}, d={max_bic['d']}, q={max_bic['q']})"
+#     rf" e o de maior Acurácia foi o ARIMA(p={max_acuracia['p']}, d={max_acuracia['d']}, q={max_acuracia['q']})"
+# )
 
 
 # def gera_analises(df, resultados, coluna_serie):
