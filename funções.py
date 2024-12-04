@@ -4,37 +4,10 @@ from itertools import product
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import root_mean_squared_error
-from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
+from statsmodels.graphics.tsaplots import plot_acf, plot_pacf, acf, pacf
 from statsmodels.tsa.arima.model import ARIMA
 import numpy as np
-
-
-def gera_graficos_predict(df, coluna_serie, yhat, p, d, q):
-    plt.figure(figsize=(10, 8), facecolor="whitesmoke")
-
-    grafico_yhat = sns.lineplot(x=df.index, y=df[coluna_serie], label="Real")
-    sns.lineplot(x=df.index, y=yhat, color="red", label="Previsto")
-    grafico_yhat.set_title(f"Gráfico para ARIMA({p}, 0, {q})")
-    grafico_yhat.set_xlabel("Eixo X")
-    grafico_yhat.set_ylabel("Eixo Y")
-
-
-def gera_ljungbox(model_fit, p, d, q):
-    ljungbox = model_fit.test_serial_correlation(method="ljungbox")
-
-    print(f"\nResultados do teste de Ljung-Box para ARIMA({p}, 0, {q}):\n")
-
-    for lag in range(len(ljungbox[0][0])):
-        p_valor = ljungbox[0][1][lag]
-        print(f"Lag {lag + 1}: p-valor = {p_valor}")
-
-
-def gera_diagnosticos(model_fit, p, d, q):
-    tela_diagnostics = plt.figure(figsize=(10, 8), facecolor="whitesmoke")
-
-    model_fit.plot_diagnostics(fig=tela_diagnostics)
-
-    tela_diagnostics.suptitle(f"Gráficos de diagnóstico para ARIMA({p=}, {d=}, {q=})")
+from collections import Counter
 
 
 def plot_summary_serie(df, coluna_serie, coluna_tempo, periodicidade, summary):
@@ -76,36 +49,94 @@ def gera_boxplot(df, coluna_serie, index):
 
     plt.show()
 
-
 def gera_acf_pacf(df, coluna_serie, lags, tipo):
-    plt.figure(figsize=(10, 8), facecolor="whitesmoke")
 
     if tipo == "acf":
+        acf_values = acf(df[coluna_serie], nlags=lags)
         plot_acf(df[coluna_serie], lags=lags)
         plt.title("Gráfico de Autocorrelação")
-        plt.tick_params(labelsize=7)  # noqa: E703
+        plt.tick_params(labelsize=7)
 
-        plt.show()
-
+        plt.ylim(bottom=min(0, min(acf_values)), top=max(acf_values))
     else:
+        pacf_values = pacf(df[coluna_serie], nlags=lags)
         plot_pacf(df[coluna_serie], lags=lags)
         plt.title("Gráfico de Autocorrelação parcial")
-        plt.tick_params(labelsize=7)  # noqa: E703
+        plt.tick_params(labelsize=7)
 
-        plt.show()
+        plt.ylim(bottom=min(0, min(pacf_values)), top=max(pacf_values))
+
+    plt.gcf().set_facecolor("whitesmoke")
+    plt.show()
 
 
+def count_warnings(warnings_list):
+    tipos_warnings = {}
+    for warn in warnings_list:
+        tipo = type(warn.message).__name__
+        if tipo in tipos_warnings:
+            tipos_warnings[tipo] += 1
+        else:
+            tipos_warnings[tipo] = 1
+    return tipos_warnings
 
 
-def ajustar_arimas(p_values, d_values, q_values, df, split, coluna_serie):
-    resultados_consolidados = {}
+def acumula_warnings(tipos_warnings):
+    warnings_acumulados = {}
+    for tipo, quantidade in tipos_warnings.items():
+        if tipo in warnings_acumulados:
+            warnings_acumulados[tipo] += quantidade
+        else:
+            warnings_acumulados[tipo] = quantidade
+    return warnings_acumulados
+
+
+def ajustar_arimas(coluna_serie, train, test, name, param):
+    try:
+        resultados_iteracao = {}
+        with warnings.catch_warnings(record=True) as warns:
+
+            p = param["p"]
+            d = param["d"]
+            q = param["q"]
+
+            model = ARIMA(
+                train[coluna_serie], order=(p, d, q)
+            )
+            model_fit = model.fit()
+            predictions = model_fit.forecast(steps=len(test))
+            rmse = root_mean_squared_error(test[coluna_serie], predictions)
+            tipos_warnings = count_warnings(warns)
+            yhat = model_fit.predict(start=0, end=len(train[coluna_serie]) - 1)
+        resultados_iteracao[name] = {
+            **param,
+            "Modelo": model_fit,
+            "warnings": tipos_warnings,
+            "AIC": model_fit.aic,
+            "BIC": model_fit.bic,
+            "RMSE": rmse,
+            "yhat": yhat,
+        }
+
+    except Exception as e:
+        print(
+            f"Erro ao ajustar o modelo ARIMA(p={param['p']}, d={param['d']}, {param['q']}): {e}"
+        )
+    return resultados_iteracao, tipos_warnings
+
+
+def cross_validate_arimas(p_values, d_values, q_values, df, split, coluna_serie):
+    resultados = []
+    resultados_detalhados = []
     params = {}
-    resultados = {}
+    warnings_acumulados_aic = {}
+    warnings_acumulados_bic = {}
+    warnings_acumulados_rmse = {}
 
     for p, d, q in product(p_values, d_values, q_values):
         params[f"ARIMA({p=}, {d=}, {q=})"] = {"p": p, "d": d, "q": q}
 
-    for i, (train_index, test_index) in enumerate(split.split(df)):
+    for train_index, test_index in split.split(df):
         resultados_iteracao = {}
         menor_aic = np.inf
         menor_bic = np.inf
@@ -116,206 +147,109 @@ def ajustar_arimas(p_values, d_values, q_values, df, split, coluna_serie):
 
         for name, param in params.items():
             train, test = df.iloc[train_index], df.iloc[test_index]
-            try:
-                with warnings.catch_warnings(record=True) as warns:
-                    model = ARIMA(
-                        train[coluna_serie], order=(param["p"], param["d"], param["q"])
-                    )
-                    model_fit = model.fit()
-                    predictions = model_fit.forecast(steps=len(test))
-                    rmse = root_mean_squared_error(test[coluna_serie], predictions)
-                resultados_iteracao[name] = {
-                    **param,
-                    "Modelo": model_fit,
-                    "warnings": [warn.message for warn in warns],
-                    "AIC": model_fit.aic,
-                    "BIC": model_fit.bic,
-                    "RMSE": rmse,
-                }
-                for modelo, detalhes in resultados_iteracao.items():
-                    if detalhes["AIC"] < menor_aic:
-                        menor_aic = detalhes["AIC"]
-                        melhor_modelo_aic = modelo
 
-                    if detalhes["BIC"] < menor_bic:
-                        menor_bic = detalhes["BIC"]
-                        melhor_modelo_bic = modelo
+            resultados_iteracao, tipos_warnings = ajustar_arimas(
+                coluna_serie, train, test, name, param
+            )
 
-                    if detalhes["RMSE"] < menor_rmse:
-                        menor_rmse = detalhes["RMSE"]
-                        melhor_modelo_rmse = modelo
+            for modelo, detalhes in resultados_iteracao.items():
+                if detalhes["AIC"] < menor_aic:
+                    menor_aic = detalhes["AIC"]
+                    melhor_modelo_aic = modelo
 
-            except Exception as e:
-                print(
-                    f"Erro ao ajustar o modelo ARIMA(p={param['p']}, d={param['d']}, {param['q']}): {e}"
-                )
-        resultados[i] = resultados_iteracao
-        resultados_consolidados[i] = {
-            "Iteração": i,
-            "Menor AIC": {"Modelo": melhor_modelo_aic, "AIC": menor_aic},
-            "Menor BIC": {"Modelo": melhor_modelo_bic, "BIC": menor_bic},
-            "Menor RMSE": {"Modelo": melhor_modelo_rmse, "RMSE": rmse},
-        }
+                if detalhes["BIC"] < menor_bic:
+                    menor_bic = detalhes["BIC"]
+                    melhor_modelo_bic = modelo
 
-    return resultados, resultados_consolidados
+                if detalhes["RMSE"] < menor_rmse:
+                    menor_rmse = detalhes["RMSE"]
+                    melhor_modelo_rmse = modelo
 
+            if name == melhor_modelo_aic:
+                warnings_acumulados_aic = acumula_warnings(tipos_warnings)
 
+            if name == melhor_modelo_bic:
+                warnings_acumulados_bic = acumula_warnings(tipos_warnings)
 
-# Exemplo de uso
-# p_values = [1, 2, 3]
-# d_values = [0, 1]
-# q_values = [1, 2, 3]
-# df = pd.DataFrame({'value': [10, 15, 20, 25, 30, 35, 40, 45, 50, 55]})
-# split = TimeSeriesSplit(n_splits=3)
-# coluna_serie = 'value'
-# resultados, resultados_consolidados = ajustar_arimas(p_values, d_values, q_values, df, split, coluna_serie)
+            if name == melhor_modelo_rmse:
+                warnings_acumulados_rmse = acumula_warnings(tipos_warnings)
+
+            consolidacao = {
+                "Menor AIC": {
+                    "Modelo": melhor_modelo_aic,
+                    "AIC": menor_aic,
+                    "Warnings": warnings_acumulados_aic,
+                },
+                "Menor BIC": {
+                    "Modelo": melhor_modelo_bic,
+                    "BIC": menor_bic,
+                    "Warnings": warnings_acumulados_bic,
+                },
+                "Menor RMSE": {
+                    "Modelo": melhor_modelo_rmse,
+                    "RMSE": menor_rmse,
+                    "Warnings": warnings_acumulados_rmse,
+                },
+            }
+
+            resultados.append(consolidacao)
+            resultados_detalhados.append(resultados_iteracao)
+
+    return resultados, resultados_detalhados
 
 
-# Exemplo de uso
-# p_values = [1, 2, 3]
-# d_values = [0, 1]
-# q_values = [1, 2, 3]
-# df = pd.DataFrame({'value': [10, 15, 20, 25, 30, 35, 40, 45, 50, 55]})
-# split = TimeSeriesSplit(n_splits=3)
-# coluna_serie = 'value'
-# resultados_consolidados = ajustar_arimas(p_values, d_values, q_values, df, split, coluna_serie)
+def computar_melhores_modelos(resultados_consolidados):
+    modelos_aic = []
+    modelos_bic = []
+    modelos_rmse = []
+    total_warnings_aic = Counter()
+    total_warnings_bic = Counter()
+    total_warnings_rmse = Counter()
+
+    for resultado in resultados_consolidados:
+        modelos_aic.append(resultado["Menor AIC"]["Modelo"])
+        modelos_bic.append(resultado["Menor BIC"]["Modelo"])
+        modelos_rmse.append(resultado["Menor RMSE"]["Modelo"])
+
+        for warning, count in resultado["Menor AIC"]["Warnings"].items():
+            total_warnings_aic[warning] += count
+        for warning, count in resultado["Menor BIC"]["Warnings"].items():
+            total_warnings_bic[warning] += count
+        for warning, count in resultado["Menor RMSE"]["Warnings"].items():
+            total_warnings_rmse[warning] += count
+
+    moda_aic = Counter(modelos_aic).most_common(1)[0][0]
+    moda_bic = Counter(modelos_bic).most_common(1)[0][0]
+    moda_rmse = Counter(modelos_rmse).most_common(1)[0][0]
+
+    print(f"Moda do modelo de melhor AIC: {moda_aic}. Total de Warnings: {dict(total_warnings_aic)}")
+    print(f"Moda do modelo de melhor BIC: {moda_bic}. Total de Warnings: {dict(total_warnings_bic)}")
+    print(f"Moda do modelo de melhor RMSE: {moda_rmse}. Total de Warnings: {dict(total_warnings_rmse)}")
+
+def gera_graficos_predict(df, coluna_serie, yhat, p, d, q):
+    plt.figure(figsize=(10, 8), facecolor="whitesmoke")
+
+    grafico_yhat = sns.lineplot(x=df.index, y=df[coluna_serie], label="Real")
+    sns.lineplot(x=df.index, y=yhat, color="red", label="Previsto")
+    grafico_yhat.set_title(f"Gráfico para ARIMA({p}, {d}, {q})")
+    grafico_yhat.set_xlabel("Eixo X")
+    grafico_yhat.set_ylabel("Eixo Y")
 
 
-def encontrar_melhores_modelos(resultados):
-    melhores_modelos = {}
+def gera_ljungbox(model_fit, p, d, q):
+    ljungbox = model_fit.test_serial_correlation(method="ljungbox")
 
-    for indice, modelos in resultados.items():
-        melhor_aic = np.inf
-        melhor_bic = np.inf
-        melhor_modelo_aic = None
-        melhor_modelo_bic = None
+    print(f"\nResultados do teste de Ljung-Box para ARIMA({p}, {d}, {q}):\n")
 
-        for nome_modelo, detalhes in modelos.items():
-            if detalhes["AIC"] < melhor_aic:
-                melhor_aic = detalhes["AIC"]
-                melhor_modelo_aic = nome_modelo
-
-            if detalhes["BIC"] < melhor_bic:
-                melhor_bic = detalhes["BIC"]
-                melhor_modelo_bic = nome_modelo
-
-        melhores_modelos[indice] = {
-            "Melhor AIC": {"Modelo": melhor_modelo_aic, "AIC": melhor_aic},
-            "Melhor BIC": {"Modelo": melhor_modelo_bic, "BIC": melhor_bic},
-        }
-
-    return melhores_modelos
+    for lag in range(len(ljungbox[0][0])):
+        p_valor = ljungbox[0][1][lag]
+        print(f"Lag {lag + 1}: p-valor = {p_valor}")
 
 
-# Exemplo de uso
-resultados = {
-    0: {
-        "ARIMA(p=1, d=0, q=1)": {
-            "p": 1,
-            "d": 0,
-            "q": 1,
-            "AIC": 7221.244,
-            "BIC": 7238.891,
-            "RMSE": 110.641,
-        },
-        "ARIMA(p=1, d=0, q=2)": {
-            "p": 1,
-            "d": 0,
-            "q": 2,
-            "AIC": 7220.700,
-            "BIC": 7242.759,
-            "RMSE": 110.630,
-        },
-        # Outros modelos...
-    },
-    1: {
-        "ARIMA(p=1, d=0, q=1)": {
-            "p": 1,
-            "d": 0,
-            "q": 1,
-            "AIC": 14584.228,
-            "BIC": 14604.645,
-            "RMSE": 98.194,
-        },
-        "ARIMA(p=1, d=0, q=2)": {
-            "p": 1,
-            "d": 0,
-            "q": 2,
-            "AIC": 14581.246,
-            "BIC": 14606.767,
-            "RMSE": 98.206,
-        },
-        # Outros modelos...
-    },
-}
+def gera_diagnosticos(model_fit, p, d, q):
+    tela_diagnostics = plt.figure(figsize=(10, 8), facecolor="whitesmoke")
 
-melhores_modelos = encontrar_melhores_modelos(resultados)
-print(melhores_modelos)
+    model_fit.plot_diagnostics(fig=tela_diagnostics)
 
+    tela_diagnostics.suptitle(f"Gráficos de diagnóstico para ARIMA({p=}, {d=}, {q=})")
 
-# acuracia = []
-
-# for nome_modelo, modelo in resultados.items():
-#     p = modelo["p"]
-#     d = modelo["d"]
-#     q = modelo["q"]
-#     model_fit = modelo["Modelo"]
-#     aic = modelo["AIC"]
-#     bic = modelo["BIC"]
-#     acuracia = modelo["Acurácia"]
-
-#     yhat = model_fit.predict(start=0, end=len(df[coluna_serie]) - 1)
-
-#     predict = gera_graficos_predict(df, coluna_serie, yhat, p, d, q)
-
-#     ljungbox = gera_ljungbox(model_fit, p, d, q)
-
-#     diagnosticos = gera_diagnosticos(model_fit, p, d, q)
-
-# df_resultados = pd.DataFrame(resultados.values())
-
-# max_aic = df_resultados.loc[df_resultados["AIC"].idxmax()]
-
-# Exemplo de uso
-# p_values = [1, 2, 3]
-# d_values = [0, 1]
-# q_values = [1, 2, 3]
-# df = pd.DataFrame({'value': [10, 15, 20, 25, 30, 35, 40, 45, 50, 55]})
-# split = TimeSeriesSplit(n_splits=3)
-# coluna_serie = 'value'
-# resultados = ajustar_arimas(p_values, d_values, q_values, df, split, coluna_serie)
-
-
-# def testar_modelos(p, d, q, df, split):
-#     melhores_modelos = []
-#     melhor_aic = None
-#     for train, test = df,
-
-
-# best_models = []
-
-# for train_index, test_index in tscv.split(data):
-#     train, test = data.iloc[train_index], data.iloc[test_index]
-
-#     best_aic = np.inf
-#     best_order = None
-#     best_model_fit = None
-
-#     for p in p_values:
-#         for d in d_values:
-#             for q in q_values:
-#                 try:
-#                     model_fit = fit_arima_model(train["value"], order=(p, d, q))
-#                     aic = model_fit.aic
-#                     if aic < best_aic:
-#                         best_aic = aic
-#                         best_order = (p, d, q)
-#                         best_model_fit = model_fit
-#                 except Exception as e:
-#                     print(f"Erro ao ajustar o modelo ARIMA(p={p}, d={d}, q={q}): {e}")
-
-#     best_models.append((best_order, best_model_fit))
-
-# # Comparar os melhores modelos selecionados
-# for i, (order, model_fit) in enumerate(best_models):
-#     print(f"Divisão {i}: Melhor modelo ARIMA{order} com AIC = {model_fit.aic}")

@@ -4,13 +4,11 @@ from sklearn.model_selection import TimeSeriesSplit
 from statsmodels.tsa.stattools import adfuller
 
 from funções import (
-    ajustar_arimas,
+    cross_validate_arimas,
     gera_acf_pacf,
     gera_boxplot,
-    # gera_diagnosticos,
-    # gera_graficos_predict,
-    # gera_ljungbox,
     plot_summary_serie,
+    computar_melhores_modelos,
 )
 
 pd.options.display.float_format = "{:,.2f}".format
@@ -49,33 +47,16 @@ d_values = [0]
 
 
 split = TimeSeriesSplit(n_splits=2)
-# split = TimeSeriesSplit(n_splits=5)
 
-resultados, resultados_consolidados = ajustar_arimas(
+resultados, resultados_detalhados = cross_validate_arimas(
     p_values, d_values, q_values, df, split, coluna_serie
 )
 
-resultados
-resultados_consolidados
+computar_melhores_modelos(resultados)
 
 # aic_bic = {}
 
-# for nome_modelo, modelo in resultados.items():
-#     p = modelo["p"]
-#     d = modelo["d"]
-#     q = modelo["q"]
-#     model_fit = modelo["Modelo"]
-#     aic = modelo["AIC"]
-#     bic = modelo["BIC"]
-#     acuracia = modelo["Acurácia"]
 
-#     yhat = model_fit.predict(start=0, end=len(df[coluna_serie]) - 1)
-
-#     predict = gera_graficos_predict(df, coluna_serie, yhat, p, d, q)
-
-#     ljungbox = gera_ljungbox(model_fit, p, d, q)
-
-#     diagnosticos = gera_diagnosticos(model_fit, p, d, q)
 
 # df_resultados = pd.DataFrame(resultados.values())
 
