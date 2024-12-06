@@ -1,13 +1,15 @@
 import warnings
+from collections import Counter
 from itertools import product
+from typing import TypedDict
 
 import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 import seaborn as sns
 from sklearn.metrics import root_mean_squared_error
-from statsmodels.graphics.tsaplots import plot_acf, plot_pacf, acf, pacf
+from statsmodels.graphics.tsaplots import acf, pacf, plot_acf, plot_pacf
 from statsmodels.tsa.arima.model import ARIMA
-import numpy as np
-from collections import Counter
 
 
 def plot_summary_serie(df, coluna_serie, coluna_tempo, periodicidade, summary):
@@ -49,8 +51,8 @@ def gera_boxplot(df, coluna_serie, index):
 
     plt.show()
 
-def gera_acf_pacf(df, coluna_serie, lags, tipo):
 
+def gera_acf_pacf(df, coluna_serie, lags, tipo):
     if tipo == "acf":
         acf_values = acf(df[coluna_serie], nlags=lags)
         plot_acf(df[coluna_serie], lags=lags)
@@ -91,111 +93,68 @@ def acumula_warnings(tipos_warnings):
     return warnings_acumulados
 
 
-def ajustar_arimas(coluna_serie, train, test, name, param):
-    try:
-        resultados_iteracao = {}
-        with warnings.catch_warnings(record=True) as warns:
-
-            p = param["p"]
-            d = param["d"]
-            q = param["q"]
-
-            model = ARIMA(
-                train[coluna_serie], order=(p, d, q)
-            )
-            model_fit = model.fit()
-            predictions = model_fit.forecast(steps=len(test))
-            rmse = root_mean_squared_error(test[coluna_serie], predictions)
-            tipos_warnings = count_warnings(warns)
-            yhat = model_fit.predict(start=0, end=len(train[coluna_serie]) - 1)
-        resultados_iteracao[name] = {
-            **param,
-            "Modelo": model_fit,
-            "warnings": tipos_warnings,
-            "AIC": model_fit.aic,
-            "BIC": model_fit.bic,
-            "RMSE": rmse,
-            "yhat": yhat,
-        }
-
-    except Exception as e:
-        print(
-            f"Erro ao ajustar o modelo ARIMA(p={param['p']}, d={param['d']}, {param['q']}): {e}"
-        )
-    return resultados_iteracao, tipos_warnings
+class ModeloAjustado(TypedDict):
+    model: ARIMA
+    warnings: dict[str, int]
 
 
-def cross_validate_arimas(p_values, d_values, q_values, df, split, coluna_serie):
-    resultados = []
-    resultados_detalhados = []
+def ajustar_arima(time_series: pd.DataFrame, p: int, d: int, q: int) -> ModeloAjustado:
+    with warnings.catch_warnings(record=True) as warns:
+        model = ARIMA(time_series, order=(p, d, q))
+        model_fit = model.fit()
+    tipos_warnings = count_warnings(warns)
+    return ModeloAjustado(model=model_fit, warnings=tipos_warnings)
+
+
+class MetricasModelo(TypedDict):
+    # pep8: nomes de variaveis são snake case (lower com underline separando)
+    AIC: float
+    BIC: float
+    RMSE: float
+    # yhat: pd.Series
+
+
+def obter_metricas_modelo(modelo, time_series):
+    predictions = modelo.forecast(steps=len(time_series))
+    rmse = root_mean_squared_error(time_series, predictions)
+    # yhat = modelo.predict()
+    return MetricasModelo(RMSE=rmse, AIC=modelo.aic, BIC=modelo.bic)
+
+
+def cross_validate_arimas(p_values, d_values, q_values, time_series, split):
+    resultados_resumido = {}
     params = {}
-    warnings_acumulados_aic = {}
-    warnings_acumulados_bic = {}
-    warnings_acumulados_rmse = {}
 
+    # Considerar fazer isso fora da funcao e receber direto os params.
     for p, d, q in product(p_values, d_values, q_values):
         params[f"ARIMA({p=}, {d=}, {q=})"] = {"p": p, "d": d, "q": q}
 
-    for train_index, test_index in split.split(df):
-        resultados_iteracao = {}
-        menor_aic = np.inf
-        menor_bic = np.inf
-        menor_rmse = np.inf
-        melhor_modelo_aic = None
-        melhor_modelo_bic = None
-        melhor_modelo_rmse = None
+    for name, param in params.items():
+        resultados_modelo = []
+        for train_index, test_index in split.split(time_series):
+            train, test = time_series.iloc[train_index], time_series.iloc[test_index]
 
-        for name, param in params.items():
-            train, test = df.iloc[train_index], df.iloc[test_index]
+            try:
+                ajuste_atual = ajustar_arima(train, param["p"], param["d"], param["q"])
+            except Exception as e:
+                print(
+                    f"Erro ao ajustar o modelo ARIMA(p={param['p']}, d={param['d']}, {param['q']}): {e}"
+                )
+                continue
+            metricas_atual = obter_metricas_modelo(ajuste_atual["model"], test)
 
-            resultados_iteracao, tipos_warnings = ajustar_arimas(
-                coluna_serie, train, test, name, param
-            )
+            resultados_modelo.append(metricas_atual)
+        tamanho = len(resultados_modelo)
+        resultados_resumido[name] = {
+            "p": param["p"],
+            "d": param["d"],
+            "q": param["q"],
+            "AIC": sum([metricas["AIC"] for metricas in resultados_modelo]) / tamanho,
+            "BIC": sum([metricas["BIC"] for metricas in resultados_modelo]) / tamanho,
+            "RMSE": sum([metricas["RMSE"] for metricas in resultados_modelo]) / tamanho,
+        }
 
-            for modelo, detalhes in resultados_iteracao.items():
-                if detalhes["AIC"] < menor_aic:
-                    menor_aic = detalhes["AIC"]
-                    melhor_modelo_aic = modelo
-
-                if detalhes["BIC"] < menor_bic:
-                    menor_bic = detalhes["BIC"]
-                    melhor_modelo_bic = modelo
-
-                if detalhes["RMSE"] < menor_rmse:
-                    menor_rmse = detalhes["RMSE"]
-                    melhor_modelo_rmse = modelo
-
-            if name == melhor_modelo_aic:
-                warnings_acumulados_aic = acumula_warnings(tipos_warnings)
-
-            if name == melhor_modelo_bic:
-                warnings_acumulados_bic = acumula_warnings(tipos_warnings)
-
-            if name == melhor_modelo_rmse:
-                warnings_acumulados_rmse = acumula_warnings(tipos_warnings)
-
-            consolidacao = {
-                "Menor AIC": {
-                    "Modelo": melhor_modelo_aic,
-                    "AIC": menor_aic,
-                    "Warnings": warnings_acumulados_aic,
-                },
-                "Menor BIC": {
-                    "Modelo": melhor_modelo_bic,
-                    "BIC": menor_bic,
-                    "Warnings": warnings_acumulados_bic,
-                },
-                "Menor RMSE": {
-                    "Modelo": melhor_modelo_rmse,
-                    "RMSE": menor_rmse,
-                    "Warnings": warnings_acumulados_rmse,
-                },
-            }
-
-            resultados.append(consolidacao)
-            resultados_detalhados.append(resultados_iteracao)
-
-    return resultados, resultados_detalhados
+    return resultados_resumido
 
 
 def computar_melhores_modelos(resultados_consolidados):
@@ -222,15 +181,23 @@ def computar_melhores_modelos(resultados_consolidados):
     moda_bic = Counter(modelos_bic).most_common(1)[0][0]
     moda_rmse = Counter(modelos_rmse).most_common(1)[0][0]
 
-    print(f"Moda do modelo de melhor AIC: {moda_aic}. Total de Warnings: {dict(total_warnings_aic)}")
-    print(f"Moda do modelo de melhor BIC: {moda_bic}. Total de Warnings: {dict(total_warnings_bic)}")
-    print(f"Moda do modelo de melhor RMSE: {moda_rmse}. Total de Warnings: {dict(total_warnings_rmse)}")
-    
+    print(
+        f"Moda do modelo de melhor AIC: {moda_aic}. Total de Warnings: {dict(total_warnings_aic)}"
+    )
+    print(
+        f"Moda do modelo de melhor BIC: {moda_bic}. Total de Warnings: {dict(total_warnings_bic)}"
+    )
+    print(
+        f"Moda do modelo de melhor RMSE: {moda_rmse}. Total de Warnings: {dict(total_warnings_rmse)}"
+    )
+
     melhores_modelos = {"AIC": moda_aic, "BIC": moda_bic, "RMSE": moda_rmse}
-    
+
     return melhores_modelos
 
+
 def gera_graficos_predict(df, coluna_serie, yhat, p, d, q):
+    # alterar para calcular o yhat aqui
     plt.figure(figsize=(10, 8), facecolor="whitesmoke")
 
     grafico_yhat = sns.lineplot(x=df.index, y=df[coluna_serie], label="Real")
@@ -256,4 +223,3 @@ def gera_diagnosticos(model_fit, p, d, q):
     model_fit.plot_diagnostics(fig=tela_diagnostics)
 
     tela_diagnostics.suptitle(f"Gráficos de diagnóstico para ARIMA({p=}, {d=}, {q=})")
-

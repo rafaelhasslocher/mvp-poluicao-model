@@ -4,11 +4,13 @@ from sklearn.model_selection import TimeSeriesSplit
 from statsmodels.tsa.stattools import adfuller
 
 from funcoes import (
+    ajustar_arima,
+    computar_melhores_modelos,
     cross_validate_arimas,
     gera_acf_pacf,
     gera_boxplot,
+    obter_metricas_modelo,
     plot_summary_serie,
-    computar_melhores_modelos,
 )
 
 pd.options.display.float_format = "{:,.2f}".format
@@ -27,44 +29,40 @@ df = df.asfreq(frequencia_serie)
 
 df.describe()
 
-plot_summary_serie(df, coluna_serie, coluna_tempo, periodicidade="ME", summary=np.mean)
-plot_summary_serie(df, coluna_serie, coluna_tempo, periodicidade="ME", summary=np.std)
+# plot_summary_serie(df, coluna_serie, coluna_tempo, periodicidade="ME", summary=np.mean)
+# plot_summary_serie(df, coluna_serie, coluna_tempo, periodicidade="ME", summary=np.std)
 
-gera_boxplot(df, coluna_serie, df.index.year)
+# gera_boxplot(df, coluna_serie, df.index.year)
 
-gera_acf_pacf(df, coluna_serie, lags=10, tipo="acf")
-gera_acf_pacf(df, coluna_serie, lags=10, tipo="pacf")
+# gera_acf_pacf(df, coluna_serie, lags=10, tipo="acf")
+# gera_acf_pacf(df, coluna_serie, lags=10, tipo="pacf")
 
-# testando a estacionariedade da série
+#testando a estacionariedade da série
 
-result = adfuller(df[coluna_serie])
-print("Estatística ADF", result[0])
-print("p-valor", result[1])
+# result = adfuller(df[coluna_serie])
+# print("Estatística ADF", result[0])
+# print("p-valor", result[1])
 
 p_values = [1, 2, 3]
 q_values = [1, 2, 3]
 d_values = [0]
 
+train = df.iloc[1:round(len(df)*0.8)]
+test = df.iloc[round(len(df)*0.8 + 1): len(df)]
 
-split = TimeSeriesSplit(n_splits=2)
+split = TimeSeriesSplit(n_splits=5)
 
-resultados, resultados_detalhados = cross_validate_arimas(
-    p_values, d_values, q_values, df, split, coluna_serie
-)
+resultados_cv = cross_validate_arimas(p_values, d_values, q_values, df[coluna_serie], split)
 
-melhores_modelos = computar_melhores_modelos(resultados)
+resultados_cv
 
-yhat_list = []
+pd.DataFrame.from_dict(resultados_cv, orient='index')
 
-for melhor_modelo in melhores_modelos.values():
-    for modelo in resultados_detalhados:
-        dicionario = modelo.get(melhor_modelo)
-        yhat_list.append(dicionario)
+#desse df, extrair os parâmetros pra poder rodar o yhat
 
-yhat_list = [item for item in yhat_list if item is not None]
+#verificar forecast x predict
 
-for i in yhat_list:
-    print(i.get("yhat"))
+#analisar anova
 
 # aic_bic = {}
 
