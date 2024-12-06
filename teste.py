@@ -3,7 +3,7 @@ import pandas as pd
 from sklearn.model_selection import TimeSeriesSplit
 from statsmodels.tsa.stattools import adfuller
 
-from funções import (
+from funcoes import (
     cross_validate_arimas,
     gera_acf_pacf,
     gera_boxplot,
