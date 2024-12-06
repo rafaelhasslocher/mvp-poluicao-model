@@ -52,10 +52,21 @@ resultados, resultados_detalhados = cross_validate_arimas(
     p_values, d_values, q_values, df, split, coluna_serie
 )
 
-computar_melhores_modelos(resultados)
+melhores_modelos = computar_melhores_modelos(resultados)
+
+yhat_list = []
+
+for melhor_modelo in melhores_modelos.values():
+    for modelo in resultados_detalhados:
+        dicionario = modelo.get(melhor_modelo)
+        yhat_list.append(dicionario)
+
+yhat_list = [item for item in yhat_list if item is not None]
+
+for i in yhat_list:
+    print(i.get("yhat"))
 
 # aic_bic = {}
-
 
 
 # df_resultados = pd.DataFrame(resultados.values())

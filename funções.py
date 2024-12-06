@@ -225,6 +225,10 @@ def computar_melhores_modelos(resultados_consolidados):
     print(f"Moda do modelo de melhor AIC: {moda_aic}. Total de Warnings: {dict(total_warnings_aic)}")
     print(f"Moda do modelo de melhor BIC: {moda_bic}. Total de Warnings: {dict(total_warnings_bic)}")
     print(f"Moda do modelo de melhor RMSE: {moda_rmse}. Total de Warnings: {dict(total_warnings_rmse)}")
+    
+    melhores_modelos = {"AIC": moda_aic, "BIC": moda_bic, "RMSE": moda_rmse}
+    
+    return melhores_modelos
 
 def gera_graficos_predict(df, coluna_serie, yhat, p, d, q):
     plt.figure(figsize=(10, 8), facecolor="whitesmoke")
