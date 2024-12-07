@@ -1,10 +1,8 @@
 import warnings
-from collections import Counter
 from itertools import product
 from typing import TypedDict
 
 import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
 import seaborn as sns
 from sklearn.metrics import root_mean_squared_error
@@ -82,17 +80,6 @@ def count_warnings(warnings_list):
             tipos_warnings[tipo] = 1
     return tipos_warnings
 
-
-def acumula_warnings(tipos_warnings):
-    warnings_acumulados = {}
-    for tipo, quantidade in tipos_warnings.items():
-        if tipo in warnings_acumulados:
-            warnings_acumulados[tipo] += quantidade
-        else:
-            warnings_acumulados[tipo] = quantidade
-    return warnings_acumulados
-
-
 class ModeloAjustado(TypedDict):
     model: ARIMA
     warnings: dict[str, int]
@@ -111,13 +98,10 @@ class MetricasModelo(TypedDict):
     AIC: float
     BIC: float
     RMSE: float
-    # yhat: pd.Series
-
 
 def obter_metricas_modelo(modelo, time_series):
-    predictions = modelo.forecast(steps=len(time_series))
+    predictions = modelo.predict(start=time_series.index[0], end=time_series.index[-1])
     rmse = root_mean_squared_error(time_series, predictions)
-    # yhat = modelo.predict()
     return MetricasModelo(RMSE=rmse, AIC=modelo.aic, BIC=modelo.bic)
 
 
@@ -154,61 +138,33 @@ def cross_validate_arimas(p_values, d_values, q_values, time_series, split):
             "RMSE": sum([metricas["RMSE"] for metricas in resultados_modelo]) / tamanho,
         }
 
+    resultados_resumido = pd.DataFrame.from_dict(resultados_resumido, orient='index')
+
+    print(f"O modelo de menor AIC médio é o {resultados_resumido['AIC'].idxmin()}.")
+    print(f"O modelo de menor BIC médio é o {resultados_resumido['BIC'].idxmin()}.")
+    print(f"O modelo de menor RMSE é o {resultados_resumido['RMSE'].idxmin()}.")
+
     return resultados_resumido
 
 
-def computar_melhores_modelos(resultados_consolidados):
-    modelos_aic = []
-    modelos_bic = []
-    modelos_rmse = []
-    total_warnings_aic = Counter()
-    total_warnings_bic = Counter()
-    total_warnings_rmse = Counter()
-
-    for resultado in resultados_consolidados:
-        modelos_aic.append(resultado["Menor AIC"]["Modelo"])
-        modelos_bic.append(resultado["Menor BIC"]["Modelo"])
-        modelos_rmse.append(resultado["Menor RMSE"]["Modelo"])
-
-        for warning, count in resultado["Menor AIC"]["Warnings"].items():
-            total_warnings_aic[warning] += count
-        for warning, count in resultado["Menor BIC"]["Warnings"].items():
-            total_warnings_bic[warning] += count
-        for warning, count in resultado["Menor RMSE"]["Warnings"].items():
-            total_warnings_rmse[warning] += count
-
-    moda_aic = Counter(modelos_aic).most_common(1)[0][0]
-    moda_bic = Counter(modelos_bic).most_common(1)[0][0]
-    moda_rmse = Counter(modelos_rmse).most_common(1)[0][0]
-
-    print(
-        f"Moda do modelo de melhor AIC: {moda_aic}. Total de Warnings: {dict(total_warnings_aic)}"
-    )
-    print(
-        f"Moda do modelo de melhor BIC: {moda_bic}. Total de Warnings: {dict(total_warnings_bic)}"
-    )
-    print(
-        f"Moda do modelo de melhor RMSE: {moda_rmse}. Total de Warnings: {dict(total_warnings_rmse)}"
-    )
-
-    melhores_modelos = {"AIC": moda_aic, "BIC": moda_bic, "RMSE": moda_rmse}
-
-    return melhores_modelos
-
-
-def gera_graficos_predict(df, coluna_serie, yhat, p, d, q):
-    # alterar para calcular o yhat aqui
+def gera_graficos_predict(time_series, p, d, q):
+    modelo = ajustar_arima(time_series, p, d, q)
+    yhat = modelo["model"].predict(start=time_series.index[0], end=time_series.index[-1])
     plt.figure(figsize=(10, 8), facecolor="whitesmoke")
 
-    grafico_yhat = sns.lineplot(x=df.index, y=df[coluna_serie], label="Real")
-    sns.lineplot(x=df.index, y=yhat, color="red", label="Previsto")
+    grafico_yhat = sns.lineplot(x=time_series.index, y=time_series, label="Real")
+    sns.lineplot(x=time_series.index, y=yhat, color="red", label="Previsto")
     grafico_yhat.set_title(f"Gráfico para ARIMA({p}, {d}, {q})")
     grafico_yhat.set_xlabel("Eixo X")
     grafico_yhat.set_ylabel("Eixo Y")
 
 
-def gera_ljungbox(model_fit, p, d, q):
-    ljungbox = model_fit.test_serial_correlation(method="ljungbox")
+def gera_ljungbox(time_series, p, d, q):
+
+    ajuste = ajustar_arima(time_series, p, d, q)
+    model = ajuste["model"]
+
+    ljungbox = model.test_serial_correlation(method="ljungbox")
 
     print(f"\nResultados do teste de Ljung-Box para ARIMA({p}, {d}, {q}):\n")
 
@@ -217,9 +173,17 @@ def gera_ljungbox(model_fit, p, d, q):
         print(f"Lag {lag + 1}: p-valor = {p_valor}")
 
 
-def gera_diagnosticos(model_fit, p, d, q):
+def gera_diagnosticos(time_series, p, d, q):
+
+    ajuste = ajustar_arima(time_series, p, d, q)
+    model = ajuste["model"]
+
     tela_diagnostics = plt.figure(figsize=(10, 8), facecolor="whitesmoke")
 
-    model_fit.plot_diagnostics(fig=tela_diagnostics)
+    model.plot_diagnostics(fig=tela_diagnostics, auto_ylims=True)
 
     tela_diagnostics.suptitle(f"Gráficos de diagnóstico para ARIMA({p=}, {d=}, {q=})")
+    
+
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+
