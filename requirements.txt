@@ -6,3 +6,4 @@ tensorflow
 keras
 statsmodels
 seaborn
+keras-tuner

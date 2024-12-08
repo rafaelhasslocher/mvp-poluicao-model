@@ -16,9 +16,9 @@ from funcoes import (
 
 pd.options.display.float_format = "{:,.2f}".format
 
-df_train = pd.read_csv("data/LSTM-Multivariate_pollution.csv")
+base_treino = pd.read_csv("data/LSTM-Multivariate_pollution.csv")
 
-df_test = pd.read_csv("data/pollution_test_data1.csv")
+base_teste = pd.read_csv("data/pollution_test_data1.csv")
 
 coluna_serie = "pollution"
 coluna_tempo = "date"
@@ -26,11 +26,11 @@ frequencia_serie = "h"
 
 # fazendo transformações necessárias
 
-df_train[coluna_tempo] = pd.to_datetime(df_train[coluna_tempo])
-df_train.set_index(coluna_tempo, inplace=True)
-df_train = df_train.asfreq(frequencia_serie)
+base_treino[coluna_tempo] = pd.to_datetime(base_treino[coluna_tempo])
+base_treino.set_index(coluna_tempo, inplace=True)
+base_treino = base_treino.asfreq(frequencia_serie)
 
-df_train.describe()
+base_treino.describe()
 
 # plot_summary_serie(df, coluna_serie, coluna_tempo, periodicidade="ME", summary=np.mean)
 # plot_summary_serie(df, coluna_serie, coluna_tempo, periodicidade="ME", summary=np.std)
@@ -60,19 +60,19 @@ p = 1
 d = 0
 q = 1
 
-selecionado = ajustar_arima(df_train[coluna_serie], p, d, q)
+selecionado = ajustar_arima(base_treino[coluna_serie], p, d, q)
 
 print(selecionado.get("warnings"))
 
-gera_graficos_predict(df_train[coluna_serie], p, d, q)
+gera_graficos_predict(base_treino[coluna_serie], p, d, q)
 
-gera_ljungbox(df_train[coluna_serie], p, d, q)
+gera_ljungbox(base_treino[coluna_serie], p, d, q)
 
-gera_diagnosticos(df_train[coluna_serie], p, d, q)
+gera_diagnosticos(base_treino[coluna_serie], p, d, q)
 
-residuals_train = selecionado["model"].resid
+residuos_treino = selecionado["model"].resid
 
-yhat = gera_graficos_predict(df_test[coluna_serie], p, d, q)
+yhat = gera_graficos_predict(base_teste[coluna_serie], p, d, q)
 
-residuals_test = df_test[coluna_serie] - yhat
+residuos_teste = base_teste[coluna_serie] - yhat
 
