@@ -158,6 +158,8 @@ def gera_graficos_predict(time_series, p, d, q):
     grafico_yhat.set_xlabel("Eixo X")
     grafico_yhat.set_ylabel("Eixo Y")
 
+    return yhat
+
 
 def gera_ljungbox(time_series, p, d, q):
 
