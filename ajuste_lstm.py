@@ -11,6 +11,7 @@ from sklearn.metrics import mean_squared_error as mse
 from tensorflow.keras.callbacks import ModelCheckpoint  # type: ignore
 from tensorflow.keras.metrics import RootMeanSquaredError  # type: ignore
 from tensorflow.keras.optimizers import SGD, Adam, RMSprop  # type: ignore
+
 from tensorflow.keras.callbacks import EarlyStopping  # type: ignore
 
 from keras_tuner import RandomSearch
@@ -131,6 +132,9 @@ print(
 def build_model(hp):
     model = Sequential()
     model.add(
+        Input(shape=(hp.Int("n_past", min_value=1, max_value=20, step=1), X_train.shape[2]))
+    )
+    model.add(
         LSTM(
             units=hp.Int("units_1", min_value=32, max_value=512, step=32),
             return_sequences=True,
@@ -183,7 +187,7 @@ tuner = RandomSearch(
 tuner.search(
     X_train,
     y_train,
-    epochs=10,
+    epochs=5,
     batch_size=64,
     validation_split=0.1,
     callbacks=[early_stopping, checkpoint],
@@ -200,6 +204,7 @@ print(f"Melhor número de unidades na segunda camada LSTM: {best_hps.get('units_
 print(f"Melhor taxa de aprendizado: {best_hps.get('learning_rate')}")
 print(f"Melhor otimizador: {best_hps.get('optimizer')}")
 print(f"Melhor função de perda: {best_hps.get('loss')}")
+print(f"Melhor n_past: {best_hps.get('n_past')}")
 
 
 model = build_model(best_hps)
