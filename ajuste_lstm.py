@@ -184,11 +184,14 @@ y_test_full = np.hstack([zeros_y_test, y_test_reshaped])
 y_test_original = scaler.inverse_transform(y_test_full)[:, -1]
 
 test_results = pd.DataFrame(
-    data={"Train Predictions": test_predictions_original, "Actual": y_test_original}
+    data={"Train Predictions": test_predictions_original}
 )
 test_results.head()
 
 plt.plot(test_results["Train Predictions"][:200], label="Predicted Values")
-plt.plot(test_results["Actual"][:200], label="True Values")
+plt.legend()
+plt.show()
+
+plt.plot(df_test["residuals"][:200], label="Values")
 plt.legend()
 plt.show()
