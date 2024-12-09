@@ -134,6 +134,7 @@ print(
     )
 )
 
+
 def build_model(hp):
     model = Sequential()
     model.add(
@@ -157,6 +158,7 @@ def build_model(hp):
         metrics=[RootMeanSquaredError()],
     )
     return model
+
 
 # # design network
 
@@ -188,12 +190,13 @@ tuner = RandomSearch(
     executions_per_trial=1,
     directory="my_dir",
     project_name="lstm_tuning",
+    overwrite=True,
 )
 
 tuner.search(
     X_train,
     y_train,
-    epochs=10,
+    epochs=5,
     batch_size=32,
     validation_split=0.1,
     callbacks=[early_stopping, checkpoint],
@@ -212,7 +215,7 @@ model = build_model(best_hps)
 history = model.fit(
     X_train,
     y_train,
-    epochs=150,
+    epochs=100,
     batch_size=32,
     validation_split=0.1,
     callbacks=[early_stopping, checkpoint],
@@ -222,21 +225,21 @@ history = model.fit(
 
 best_model = load_model("best_model.keras")
 
-model.summary()
+# model.summary()
 
-# fit network
-history = model.fit(
-    X_train,
-    y_train,
-    epochs=150,
-    batch_size=32,
-    validation_split=0.1,
-    callbacks=[early_stopping, checkpoint],
-    shuffle=False,
-)
+# # fit network
+# history = model.fit(
+#     X_train,
+#     y_train,
+#     epochs=150,
+#     batch_size=32,
+#     validation_split=0.1,
+#     callbacks=[early_stopping, checkpoint],
+#     shuffle=False,
+# )
 
-# Load the best model
-best_model = load_model("best_model.keras")
+# # Load the best model
+# best_model = load_model("best_model.keras")
 
 plt.figure(figsize=(15, 6))
 plt.plot(history.history["loss"], label="Training Loss")
