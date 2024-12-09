@@ -36,7 +36,7 @@ base_teste = base_teste.drop(columns={coluna_serie})
 
 base_teste["residuos"] = residuos_teste
 
-df_test = base_teste[
+base_teste = base_teste[
     ["residuos", "dew", "temp", "press", "wnd_dir", "wnd_spd", "snow", "rain"]
 ]
 
@@ -45,7 +45,7 @@ base_teste
 base_treino.describe()
 
 df_train_scaled = base_treino.copy()
-df_test_scaled = df_test.copy()
+df_test_scaled = base_teste.copy()
 
 
 mapping = {"NE": 0, "SE": 1, "NW": 2, "cv": 3}
