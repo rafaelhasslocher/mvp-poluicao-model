@@ -16,6 +16,8 @@ from tensorflow.keras.metrics import RootMeanSquaredError
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
 
+from keras_tuner import RandomSearch
+
 # from ajuste_arima import (
 #     coluna_serie,
 #     base_treino,
@@ -132,20 +134,44 @@ print(
     )
 )
 
-# design network
+def build_model(hp):
+    model = Sequential()
+    model.add(
+        LSTM(
+            units=hp.Int("units_1", min_value=32, max_value=64, step=32),
+            return_sequences=True,
+        )
+    )
+    model.add(Dropout(hp.Float("dropout_1", min_value=0.1, max_value=0.3, step=0.1)))
+    model.add(
+        LSTM(
+            units=hp.Int("units_2", min_value=16, max_value=32, step=16),
+            return_sequences=False,
+        )
+    )
 
-model = Sequential()
-model.add(
-    LSTM(32, input_shape=(X_train.shape[1], X_train.shape[2]), return_sequences=True)
-)
-model.add(Dropout(0.2))
-model.add(LSTM(16, return_sequences=False))
-model.add(Dense(y_train.shape[1]))
+    model.add(Dense(y_train.shape[1]))
+    model.compile(
+        loss="mse",
+        optimizer=Adam(learning_rate=0.001),
+        metrics=[RootMeanSquaredError()],
+    )
+    return model
 
-# Compile the model
-model.compile(
-    loss="mse", optimizer=Adam(learning_rate=0.001), metrics=[RootMeanSquaredError()]
-)
+# # design network
+
+# model = Sequential()
+# model.add(
+#     LSTM(32, input_shape=(X_train.shape[1], X_train.shape[2]), return_sequences=True)
+# )
+# model.add(Dropout(0.2))
+# model.add(LSTM(16, return_sequences=False))
+# model.add(Dense(y_train.shape[1]))
+
+# # Compile the model
+# model.compile(
+#     loss="mse", optimizer=Adam(learning_rate=0.001), metrics=[RootMeanSquaredError()]
+# )
 
 # Define callbacks for avoiding overfitting
 early_stopping = EarlyStopping(
@@ -154,6 +180,47 @@ early_stopping = EarlyStopping(
 checkpoint = ModelCheckpoint(
     "best_model.keras", monitor="val_loss", save_best_only=True
 )
+
+tuner = RandomSearch(
+    build_model,
+    objective="val_loss",
+    max_trials=3,
+    executions_per_trial=1,
+    directory="my_dir",
+    project_name="lstm_tuning",
+)
+
+tuner.search(
+    X_train,
+    y_train,
+    epochs=10,
+    batch_size=32,
+    validation_split=0.1,
+    callbacks=[early_stopping, checkpoint],
+    shuffle=False,
+)
+
+# Obter os melhores hiperparâmetros
+best_hps = tuner.get_best_hyperparameters()[0]
+
+# Visualizar os valores dos melhores hiperparâmetros
+print(f"Melhor número de unidades na primeira camada LSTM: {best_hps.get('units_1')}")
+print(f"Melhor taxa de dropout na primeira camada: {best_hps.get('dropout_1')}")
+print(f"Melhor número de unidades na segunda camada LSTM: {best_hps.get('units_2')}")
+
+model = build_model(best_hps)
+history = model.fit(
+    X_train,
+    y_train,
+    epochs=150,
+    batch_size=32,
+    validation_split=0.1,
+    callbacks=[early_stopping, checkpoint],
+    shuffle=False,
+)
+
+
+best_model = load_model("best_model.keras")
 
 model.summary()
 
