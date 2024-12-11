@@ -1,7 +1,5 @@
 # MVP-Poluicao-Model
 
-### Autor: Rafael Hasslocher
-
 Este repositório contém o MVP desenvolvido para aprovação na Sprint "Machine Learning & Analytics" da Pós-Graduação Lato Sensu em Ciência de Dados e Analytics do CCE PUC-Rio.
 
 Para a construção desse MVP, utilizou-se as bibliotecas `keras` e `stats-models` para ajustar os modelos de interesse. Adicionalmente, as bibliotecas `numpy`, `pandas`, `matplotlib`, `seaborn` são utilizadas para o trabalho da base e visualização dos dados como um todo.
@@ -16,7 +14,7 @@ Para realizar o treinamento e avaliação do modelo, é necessário primeiro cri
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate
+.venv/scripts/activate
 ```
 
 Então, é preciso instalar as dependências do projeto.
