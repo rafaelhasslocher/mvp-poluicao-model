@@ -25,7 +25,7 @@ pip install -r requirements.txt
 
 ## Utilização
 
-Para treinar o modelo, basta seguir o notebook `mvp.ipynb`.
+Para treinar o modelo, basta seguir o notebook `poluicao-model.ipynb`.
 
 O notebook contempla a importação dos dados hospedados em um repositório no Github. É importante mencionar que os dados de treino e de teste estão em arquivos diferentes.
 
