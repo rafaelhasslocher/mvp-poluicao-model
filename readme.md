@@ -10,7 +10,7 @@ A biblioteca `scikit-learn` é utilizada para obter algumas métricas de avalia�
 
 ## Utilização
 
-Para treinar o modelo, basta seguir o notebook `poluicao-model.ipynb`.
+Para treinar o modelo, basta seguir o notebook `poluicao-model.ipynb`. É importante pontuar que alguns blocos do código podem apresentar um tempo elevado de execução no ambiente do Google Colab. Foram incluídos comentários nos blocos para alertar quanto a esse ponto.
 
 O notebook contempla a importação dos dados hospedados em um repositório no Github. É importante mencionar que os dados de treino e de teste estão em arquivos diferentes.
 
