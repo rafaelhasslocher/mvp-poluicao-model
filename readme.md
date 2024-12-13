@@ -8,21 +8,6 @@ A biblioteca `keras-tuner` é utilizada para a otimização dos hiperparâmetros
 
 A biblioteca `scikit-learn` é utilizada para obter algumas métricas de avaliação dos modelos.
 
-## Instalação local
-
-Para realizar o treinamento e avaliação do modelo, é necessário primeiro criar um ambiente virtual.
-
-```bash
-python -m venv .venv
-.venv/scripts/activate
-```
-
-Então, é preciso instalar as dependências do projeto.
-
-```bash
-pip install -r requirements.txt
-```
-
 ## Utilização
 
 Para treinar o modelo, basta seguir o notebook `poluicao-model.ipynb`.
